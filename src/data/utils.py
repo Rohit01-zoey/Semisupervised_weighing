@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import Dataset, random_split
 from torchvision import transforms
 
-from cifar import CIFAR10, CIFAR100
+from data.cifar import CIFAR10, CIFAR100
 
 def count_distribution(dataset):
     """Count the distribution of the dataset.
