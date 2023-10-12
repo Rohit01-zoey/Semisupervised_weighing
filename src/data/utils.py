@@ -1,8 +1,35 @@
 import torch
 from torch.utils.data import Dataset, random_split
 from torchvision import transforms
+from torch.utils.data import Dataset
 
 from data.cifar import CIFAR10, CIFAR100
+
+
+class TransformedSubset(Dataset):
+    """
+    A dataset that wraps a subset and applies a given transform.
+    """
+    def __init__(self, subset, transform=None):
+        """
+        Args:
+            subset (Subset): A Subset object.
+            transform (callable, optional): A function/transform that takes in 
+                an element from the subset and returns a transformed version.
+        """
+        self.subset = subset
+        self.transform = transform
+
+    def __getitem__(self, index):
+        x, y = self.subset[index]
+        
+        if self.transform:
+            x = self.transform(x)
+        
+        return x, y
+
+    def __len__(self):
+        return len(self.subset)
 
 def count_distribution(dataset):
     """Count the distribution of the dataset.
@@ -28,8 +55,9 @@ def prepare_online(dataset, transform = None):
         Dataset: Transformed dataset.
     '''
     if isinstance(dataset, torch.utils.data.Subset):
-        dataset = torch.utils.data.ConcatDataset([dataset])
-    dataset.transform = transform
+        dataset = TransformedSubset(dataset, transform) # if the dataset is a subset, wrap it in TransformedSubset
+    else:
+        dataset.transform = transform # if the dataset is not a subset, apply the transform to the dataset
     return dataset
 
 
@@ -93,7 +121,7 @@ def split(dataset, split_ratio = 0.15, shuffle = True, seed = 2):
     return split1, split2
 
 
-def get_dataloader(dataset, batch_size = 128, shuffle = True, num_workers = 4, pin_memory = True):
+def get_dataloader(dataset, batch_size = 128, shuffle = True, num_workers = 0, pin_memory = True):
     '''Returns the dataloader for the dataset.
     Args:
         dataset (Dataset): Dataset to load.
@@ -105,3 +133,4 @@ def get_dataloader(dataset, batch_size = 128, shuffle = True, num_workers = 4, p
         DataLoader: Dataloader for the dataset.
     '''
     return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory)
+
