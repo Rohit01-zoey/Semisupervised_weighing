@@ -6,7 +6,9 @@ class CrossEntropyLoss(nn.Module):
         super(CrossEntropyLoss, self).__init__()
         self.loss_fn = nn.CrossEntropyLoss()
 
-    def forward(self, output, target, advice = None):
+    def forward(self, output, target, advice = None, weights = None):
+        if weights is not None:
+            target = torch.softmax(weights * target, dim=1)
         if advice is not None:
             return torch.mul(advice, self.loss_fn(output, target))
         else:
@@ -24,15 +26,30 @@ class MaskedCrossEntropyLoss(nn.Module):
         return self.loss_fn(output, target)
 
 class KLDivLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, temperature):
         super(KLDivLoss, self).__init__()
         self.loss_fn = nn.KLDivLoss(reduction='None')
+        self.temperature = temperature
 
-    def forward(self, output, target, advice = None):
+    def forward(self, output, target, advice = None, weights = None):
+        """Computes the Kullback-Leibler divergence Loss between output and target. Advice is used to reweigh the instance wise loss. 
+        Weights is used to reweigh the class wise instance wise loss and is typically applied to the teacher outputs.
+
+        Args:
+            output (torch.tensor): Tensor of size [batch_size, num_classes]. Should be log probabilities(output after softmax)
+            target (torch.tensor): Tensor of size [batch_size, num_classes]. Should be probabilities i.e target = softmax(target)
+            advice (torch.tensor, optional): Advice to reweigh the instance wise loss. Defaults to None.
+            weights (torch.tensor, optional): Weights to reweigh the class wise instance wise loss. Defaults to None.
+
+        Returns:
+            torch.tensor: Returns the loss per instance
+        """
+        if weights is not None:
+            target = torch.softmax(weights * target / self.temperature, dim=1)
         if advice is not None:
-            return torch.mul(advice, self.loss_fn(torch.log(output), target))
+            return (self.temperature**2)*torch.mul(advice, self.loss_fn(torch.log_softmax(output/self.temperature, dim = 1), target))
         else:
-            return self.loss_fn(torch.log(output), target)
+            return (self.temperature**2)*self.loss_fn(torch.log_softmax(output/self.temperature), target)
         
 
 #------------------------------------------------------------------------------------------------------------------------    

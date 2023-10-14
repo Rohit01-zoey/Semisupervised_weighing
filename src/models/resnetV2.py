@@ -121,5 +121,3 @@ class ResNetV2(nn.Module):
         x = self.classifier(x)
 
         return x
-
-

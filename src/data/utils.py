@@ -46,7 +46,7 @@ def count_distribution(dataset):
     return distribution
 
 
-def prepare_online(dataset, transform = None):
+def online_transform(dataset, transform = None):
     '''Transforms the dataset using the transforms and returns the dataset.
     Args:
         dataset (Dataset): Dataset to transform.
@@ -83,9 +83,11 @@ def fetch_dataset(dataset_name):
     if dataset_name == 'cifar10':
         dataset['train'] = CIFAR10(root='./dataset', train=True, transform = transform, download=True)
         dataset['test'] = CIFAR10(root='./dataset', train=False, transform = transform, download=True)
+        n_classes = 10
     elif dataset_name == 'cifar100':
         dataset['train'] = CIFAR100(root='./dataset', train=True, transform = transform, download=True)
         dataset['test'] = CIFAR100(root='./dataset', train=False, transform = transform, download=True)
+        n_classes = 100
     elif dataset_name == 'svhn':
         raise NotImplementedError
     elif dataset_name == 'mnist':
@@ -98,14 +100,15 @@ def fetch_dataset(dataset_name):
         raise ValueError('Dataset not found.')
     
     
-    return dataset
+    return dataset, n_classes
 
 
-def split(dataset, split_ratio = 0.15, shuffle = True, seed = 2):
+def split(dataset, split_ratio = 0.15, val_size = 500, shuffle = True, seed = 2):
     '''Splits the dataset into train and validation sets.
     Args:
         dataset (Dataset): Dataset to split.
         split_ratio (float): Ratio of the split. Default: 0.15.
+        val_size (int): Size of the validation set. Default: 500.
         shuffle (bool): Whether to shuffle the dataset before splitting. Default: True.
         seed (int): Random seed. Default: 2.
     Returns:
@@ -115,10 +118,13 @@ def split(dataset, split_ratio = 0.15, shuffle = True, seed = 2):
     if isinstance(dataset, dict):
         raise TypeError # if the dataset is a dictionary, take the train dataset for the splitting
     dataset_size = len(dataset)
-    split1_size = int(split_ratio * dataset_size)
-    split2_size = dataset_size - split1_size
-    split1, split2 = random_split(dataset, [split1_size, split2_size], generator=torch.Generator().manual_seed(seed))
-    return split1, split2
+    if split_ratio < 1:
+        split1_size = int(split_ratio * dataset_size)
+    else:
+        split1_size = int(split_ratio)
+    split2_size = dataset_size - split1_size - val_size
+    split1, split2, split3 = random_split(dataset, [split1_size, val_size, split2_size], generator=torch.Generator().manual_seed(seed))
+    return split1, split2, split3
 
 
 def get_dataloader(dataset, batch_size = 128, shuffle = True, num_workers = 0, pin_memory = True):
@@ -132,5 +138,50 @@ def get_dataloader(dataset, batch_size = 128, shuffle = True, num_workers = 0, p
     Returns:
         DataLoader: Dataloader for the dataset.
     '''
-    return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory)
+    if isinstance(dataset, dict):
+        dl = {}
+        for key in dataset:
+            dl[key] = torch.utils.data.DataLoader(dataset[key], batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory)
+    else:
+        dl = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory)
+    return dl
 
+
+def prepare_data(args, val_size = 500, retain_train_data = False, online = True):
+    '''Prepares the data for training.
+    Args:
+        args (argparse.Namespace): Arguments.
+        val_size (int): Size of the validation set. Default: 500.
+        retain_train_data (bool): Whether to retain the training data. Default: False.
+    Returns:
+        dict: Dictionary of dataloaders.
+        int: Number of classes.
+    '''
+    data, n_classes = fetch_dataset(args.data_set)
+    data['labeled'], data['val'], data['unlabeled'] = split(data['train'], split_ratio = float(args.subset_size), val_size = val_size, shuffle = True, seed = args.seed_split_seed)
+    if not retain_train_data:
+        del data['train']
+    if online:
+        return data, n_classes
+    else:
+        dataloaders = get_dataloader(data, batch_size=128, shuffle=True, num_workers=0, pin_memory=True)
+        return dataloaders, n_classes
+    
+    
+def prepare_online(data, transform):
+    '''Prepares the data for online training.
+    Args:
+        data (dict): Dictionary of datasets.
+        transform (torchvision.transforms): Transform to apply.
+    Returns:
+        dict: Dictionary of dataloaders.
+    '''
+    transformed_dataset = {}  
+    if isinstance(transform, dict):
+        for keys in data:
+            transformed_dataset[keys] = online_transform(data[keys], transform[keys])
+    else:
+        for keys in data:
+            transformed_dataset[keys] = online_transform(data[keys], transform)
+    dataloaders = get_dataloader(transformed_dataset, batch_size=128, shuffle=True, num_workers=0, pin_memory=True)
+    return dataloaders
