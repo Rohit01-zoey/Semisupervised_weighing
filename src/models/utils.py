@@ -1,5 +1,5 @@
 from models.resnetV2 import ResNetV2
-
+from models.metanet import 
 
 def get_model(str, *args, **kwargs):
     '''Returns the model.

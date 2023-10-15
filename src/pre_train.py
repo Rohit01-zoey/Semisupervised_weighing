@@ -63,8 +63,10 @@ def main(args):
         train_loss = train(model, dataloaders['labeled'], schedule['optimizer'], criteria, CUDA)
         schedule['lr'].step()
         
+        _, unlabeled_acc = eval(model, dataloaders['unlabeled'], criteria, CUDA)
+        
         test_loss, test_acc = eval(model, dataloaders['test'], criteria, CUDA)
-        print(f"Epoch: {epoch+1}/{args.epoch} | Train Loss: {train_loss:.3f} | Test Loss: {test_loss:.3f} | Test Acc: {test_acc:.3f}")
+        print(f"Epoch: {epoch+1}/{args.epoch} | Train Loss: {train_loss:.3f} | Test Loss: {test_loss:.3f} | Test Acc: {test_acc:.3f} | Unlabeled Acc: {unlabeled_acc:.3f}")
         
 
 if __name__ == '__main__':
@@ -76,7 +78,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', '-m', type=str)
     parser.add_argument('--data_set', '-d', type=str,default="cifar100")
     parser.add_argument('--seed', '-se', type=int,default=2)
-    parser.add_argument('--seed_init', '-si', type=int,default=2)
+    parser.add_argument('--seed_init', '-si', type=int,default=2, help = "controls the intialization of the model")
     parser.add_argument('--epoch', '-e', type=int, default=200)
     parser.add_argument('--cuda', '-c', type=str, help='which gpu to use',default='0')
     parser.add_argument('--checkpoint', '-ch', type=bool, default=False)
